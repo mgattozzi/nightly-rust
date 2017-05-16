@@ -1,11 +1,9 @@
-#[macro_use]
-extern crate slog;
+extern crate egg_mode;
+#[macro_use] extern crate error_chain;
+#[macro_use] extern crate slog;
 extern crate slog_term;
 extern crate slog_async;
 extern crate time;
-extern crate egg_mode;
-#[macro_use]
-extern crate error_chain;
 
 use egg_mode::{ Token, KeyPair };
 use egg_mode::tweet::DraftTweet;
@@ -53,6 +51,11 @@ fn main() {
     }
 }
 
+#[inline(always)]
+/// This is the main driver for whther there should be a tweet or not. All
+/// of the failures get passed up to this return value, or it gets on `Ok`
+/// if everything worked out. The `main` function handles logging any errors
+/// if they occur.
 fn run(log: &Logger) -> Result<()> {
     // Update the current running version each day
     let curr_version = get_rustc_version()?;
