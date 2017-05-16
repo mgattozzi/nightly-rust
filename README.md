@@ -1,4 +1,4 @@
-#nightly-rust
+# nightly-rust
 The code that runs [@NightlyRust](https://twitter.com/NightlyRust), a bot that
 checks every day to see if there is a new release. It puts out a new tweet with
 a link to all the commits for the newest release.
