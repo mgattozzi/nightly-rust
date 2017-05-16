@@ -1,0 +1,11 @@
+[package]
+name = "nightly-rust"
+version = "0.1.0"
+authors = ["Michael Gattozzi <mgattozzi@gmail.com>"]
+
+[dependencies]
+egg-mode = "0.8"
+time = "0.1"
+slog = "2"
+slog-async = "2"
+slog-term = "2"

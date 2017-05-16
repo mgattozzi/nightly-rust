@@ -1,0 +1,7 @@
+target/
+**/*.rs.bk
+access.key
+access.secret
+consumer.key
+consumer.secret
+tweet.log
