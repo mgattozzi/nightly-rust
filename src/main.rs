@@ -86,7 +86,7 @@ fn run(log: &Logger) -> Result<()> {
 #[inline(always)]
 /// Get the nightly version of rustc on the system
 fn get_rustc_version() -> Result<String> {
-    Ok(String::from_utf8(rustc(vec!["+nightly", "--version"])?.stdout)
+    Ok(String::from_utf8(rustc(["+nightly", "--version"])?.stdout)
                         .chain_err(|| "Unable to convert Vec<u8> to String")?
                         // This part extracts the date string from asking what
                         // version is in use. Since nightly is based off a
@@ -108,7 +108,7 @@ fn get_rustc_version() -> Result<String> {
 #[inline(always)]
 /// Run the update function and let us know if anything is unchanged
 fn update() -> Result<Updated> {
-    Ok(String::from_utf8(rustup(vec!["update", "nightly"])?.stdout)
+    Ok(String::from_utf8(rustup(["update", "nightly"])?.stdout)
                         .chain_err(|| "Unable to convert Vec<u8> to String")?
                         .contains("unchanged")
                         .into())
@@ -116,22 +116,22 @@ fn update() -> Result<Updated> {
 
 #[inline(always)]
 /// Run rustup commands given a vector of arguments to it
-fn rustup(args: Vec<&str>) -> Result<Output> {
+fn rustup<T: AsRef<[&'static str]>>(args: T) -> Result<Output> {
     Command::new("rustup")
-        .args(&args)
+        .args(args.as_ref())
         .output()
         .chain_err(|| "Unable to execute rustup ".to_owned() +
-                      &args.iter().fold(String::new(), |acc, &x| acc + x + " "))
+                      &args.as_ref().iter().fold(String::new(), |acc, &x| acc + x + " "))
 }
 
 #[inline(always)]
 /// Run rustc commands given a vector of arguments to it
-fn rustc(args: Vec<&str>) -> Result<Output> {
+fn rustc<T: AsRef<[&'static str]>>(args: T) -> Result<Output> {
     Command::new("rustc")
-        .args(&args)
+        .args(args.as_ref())
         .output()
         .chain_err(|| "Unable to execute rustc ".to_owned() +
-                      &args.iter().fold(String::new(), |acc, &x| acc + x + " "))
+                      &args.as_ref().iter().fold(String::new(), |acc, &x| acc + x + " "))
 }
 
 #[inline(always)]
