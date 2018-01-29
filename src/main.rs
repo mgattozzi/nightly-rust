@@ -1,25 +1,27 @@
-extern crate egg_mode;
-#[macro_use] extern crate error_chain;
 #[macro_use] extern crate slog;
+extern crate egg_mode;
 extern crate slog_term;
 extern crate slog_async;
 extern crate time;
+extern crate tokio_core;
 
 use egg_mode::{ Token, KeyPair };
 use egg_mode::tweet::DraftTweet;
 use time::Duration;
 use slog::{ Drain, Logger };
+use tokio_core::reactor::Core;
 
+use std::error::Error;
 use std::process::{ Command, Output };
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::fs::{ File, OpenOptions };
 
-error_chain!();
-
 const MESSAGE: &str =
     "A new nightly has been released. See what has changed since the last \
     one https://github.com/rust-lang/rust/commits/master?since=";
+
+type Result<T> = std::result::Result<T, Box<Error>>;
 
 fn main() {
     let log =
@@ -37,16 +39,10 @@ fn main() {
 
     info!(log, "Starting up");
 
+    let mut core = Core::new().unwrap();
     loop {
-        if let Err(ref e) = run(&log) {
+        if let Err(ref e) = run(&log, &mut core) {
             error!(log, "{}", e);
-            for e in e.iter().skip(1) {
-                error!(log, "Caused by: {}", e);
-            }
-
-            if let Some(backtrace) = e.backtrace() {
-                error!(log, "Backtrace: {:?}", backtrace);
-            }
         }
     }
 }
@@ -56,38 +52,35 @@ fn main() {
 /// of the failures get passed up to this return value, or it gets on `Ok`
 /// if everything worked out. The `main` function handles logging any errors
 /// if they occur.
-fn run(log: &Logger) -> Result<()> {
+fn run(log: &Logger, core: &mut Core) -> Result<()> {
     // Update the current running version each day
     let curr_version = get_rustc_version()?;
 
     // Check if there is an update and if there is tweet it
     match update()? {
         Updated::Yes => {
+            let handle = core.handle();
             // Create the tweet and token then send it
-            DraftTweet::new(&[MESSAGE, &curr_version].concat().to_owned())
+            core.run(DraftTweet::new(String::from(MESSAGE) + &curr_version)
                 .send(&Token::Access {
                     consumer: KeyPair::new(read("consumer.key")?,
                                            read("consumer.secret")?),
                     access: KeyPair::new(read("access.key")?,
                                          read("access.secret")?),
-                })
-                .chain_err(|| "Tweet failed to send")?;
+                }, &handle))?;
             info!(log, "New update posted");
         },
         Updated::No => info!(log, "No update for {}", curr_version),
     }
     // Wait till tomorrow to do it again
-    std::thread::sleep(Duration::days(1)
-                       .to_std()
-                       .chain_err(|| "Unable to turn Time into StdTime")?);
+    std::thread::sleep(Duration::days(1).to_std()?);
     Ok(())
 }
 
 #[inline(always)]
 /// Get the nightly version of rustc on the system
 fn get_rustc_version() -> Result<String> {
-    Ok(String::from_utf8(rustc(["+nightly", "--version"])?.stdout)
-                        .chain_err(|| "Unable to convert Vec<u8> to String")?
+    Ok(String::from_utf8(rustc(["+nightly", "--version"])?.stdout)?
                         // This part extracts the date string from asking what
                         // version is in use. Since nightly is based off a
                         // YYYY-MM-DD string this is the best way to get it
@@ -108,8 +101,7 @@ fn get_rustc_version() -> Result<String> {
 #[inline(always)]
 /// Run the update function and let us know if anything is unchanged
 fn update() -> Result<Updated> {
-    Ok(String::from_utf8(rustup(["update", "nightly"])?.stdout)
-                        .chain_err(|| "Unable to convert Vec<u8> to String")?
+    Ok(String::from_utf8(rustup(["update", "nightly"])?.stdout)?
                         .contains("unchanged")
                         .into())
 }
@@ -117,34 +109,25 @@ fn update() -> Result<Updated> {
 #[inline(always)]
 /// Run rustup commands given a vector of arguments to it
 fn rustup<T: AsRef<[&'static str]>>(args: T) -> Result<Output> {
-    Command::new("rustup")
+    Ok(Command::new("rustup")
         .args(args.as_ref())
-        .output()
-        .chain_err(|| "Unable to execute rustup ".to_owned() +
-                      &args.as_ref().iter().fold(String::new(), |acc, &x| acc + x + " "))
+        .output()?)
 }
 
 #[inline(always)]
 /// Run rustc commands given a vector of arguments to it
 fn rustc<T: AsRef<[&'static str]>>(args: T) -> Result<Output> {
-    Command::new("rustc")
+    Ok(Command::new("rustc")
         .args(args.as_ref())
-        .output()
-        .chain_err(|| "Unable to execute rustc ".to_owned() +
-                      &args.as_ref().iter().fold(String::new(), |acc, &x| acc + x + " "))
+        .output()?)
 }
 
 #[inline(always)]
 /// Read the token from a file into a String.
 fn read(path: &str) -> Result<String> {
     let mut buffer = String::new();
-    let mut reader =
-        BufReader::new(
-            File::open(path)
-                .chain_err(|| "Unable to open ".to_owned() + path)?);
-    reader
-        .read_line(&mut buffer)
-        .chain_err(|| "Unable to read from ".to_owned() + path)?;
+    let mut reader = BufReader::new(File::open(path)?);
+    reader.read_line(&mut buffer)?;
     Ok(buffer.trim().to_owned())
 }
 
